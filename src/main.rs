@@ -97,12 +97,30 @@ impl Default for UpdateState {
     }
 }
 
+// TODO: allow specifying of channel
 fn remote_system_revision() -> Option<String> {
-    // TODO: allow specifying of channel
-    reqwest::get("https://nixos.org/channels/nixos-unstable-small/git-revision")
-        .ok()?
-        .text()
+    use curl::easy::Easy;
+
+    let mut easy = Easy::new();
+    easy.url("https://nixos.org/channels/nixos-unstable-small/git-revision")
         .ok()
+        .and_then(|_| easy.follow_location(true).ok())?;
+
+    let mut buffer = Vec::new();
+
+    {
+        let mut transfer = easy.transfer();
+
+        transfer
+            .write_function(|data| {
+                buffer.extend_from_slice(data);
+                Ok(data.len())
+            })
+            .ok()?;
+        transfer.perform().ok()?;
+    }
+
+    String::from_utf8(buffer).ok()
 }
 
 fn current_system_revision() -> Option<String> {

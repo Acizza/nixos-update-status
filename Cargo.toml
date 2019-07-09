@@ -5,8 +5,8 @@ authors = ["Acizza <jgit@tuta.io>"]
 edition = "2018"
 
 [dependencies]
+curl = "~0.4.0"
 dirs = "~2.0.0"
-reqwest = "~0.9.0"
 rmp-serde = "~0.13.0"
 serde = "~1.0.0"
 serde_derive = "~1.0.0"
