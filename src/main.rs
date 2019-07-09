@@ -1,3 +1,6 @@
+mod err;
+
+use crate::err::Result;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt;
 use std::fs::{self, File};
@@ -6,8 +9,12 @@ use std::process::Command;
 
 fn main() {
     match UpdateState::determine_system_state() {
-        Some(state) => println!("{}", state),
-        None => println!("error"),
+        Ok(state) => println!("{}", state),
+        Err(err) => {
+            println!("error");
+            err::display_error(err);
+            std::process::exit(1);
+        }
     }
 }
 
@@ -23,7 +30,7 @@ enum UpdateState {
 impl UpdateState {
     const DEFAULT_FILE_NAME: &'static str = "state.mpack";
 
-    fn determine_system_state() -> Option<UpdateState> {
+    fn determine_system_state() -> Result<UpdateState> {
         let remote_rev = remote_system_revision()?;
         let current_rev = current_system_revision()?;
         let is_unsynced = remote_rev != current_rev;
@@ -46,39 +53,39 @@ impl UpdateState {
             UpdateState::Synced | UpdateState::Unsynced(_, _) => (),
         }
 
-        Some(state)
+        Ok(state)
     }
 
-    fn load() -> Option<UpdateState> {
-        let mut path = UpdateState::save_dir()?;
+    fn load() -> Result<UpdateState> {
+        let mut path = UpdateState::save_dir();
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
-        let file = File::open(path).ok()?;
-        let state: UpdateState = rmp_serde::from_read(file).ok()?;
+        let file = File::open(path)?;
+        let state: UpdateState = rmp_serde::from_read(file)?;
 
-        Some(state)
+        Ok(state)
     }
 
-    fn save(&self) -> Option<()> {
-        let dir = UpdateState::save_dir()?;
+    fn save(&self) -> Result<()> {
+        let dir = UpdateState::save_dir();
 
         if !dir.exists() {
-            fs::create_dir_all(&dir).ok()?;
+            fs::create_dir_all(&dir)?;
         }
 
         let mut path = dir;
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
-        let contents = rmp_serde::to_vec(self).ok()?;
-        fs::write(path, contents).ok()?;
+        let contents = rmp_serde::to_vec(self)?;
+        fs::write(path, contents)?;
 
-        Some(())
+        Ok(())
     }
 
-    fn save_dir() -> Option<PathBuf> {
-        let mut dir = dirs::data_local_dir()?;
+    fn save_dir() -> PathBuf {
+        let mut dir = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("~/.local/share/"));
         dir.push(env!("CARGO_PKG_NAME"));
-        Some(dir)
+        dir
     }
 }
 
@@ -98,13 +105,12 @@ impl Default for UpdateState {
 }
 
 // TODO: allow specifying of channel
-fn remote_system_revision() -> Option<String> {
+fn remote_system_revision() -> Result<String> {
     use curl::easy::Easy;
 
     let mut easy = Easy::new();
     easy.url("https://nixos.org/channels/nixos-unstable-small/git-revision")
-        .ok()
-        .and_then(|_| easy.follow_location(true).ok())?;
+        .and_then(|_| easy.follow_location(true))?;
 
     let mut buffer = Vec::new();
 
@@ -116,19 +122,18 @@ fn remote_system_revision() -> Option<String> {
                 buffer.extend_from_slice(data);
                 Ok(data.len())
             })
-            .ok()?;
-        transfer.perform().ok()?;
+            .and_then(|_| transfer.perform())?;
     }
 
-    String::from_utf8(buffer).ok()
+    Ok(String::from_utf8(buffer)?)
 }
 
-fn current_system_revision() -> Option<String> {
+fn current_system_revision() -> Result<String> {
     let mut cmd = Command::new("nixos-version");
     cmd.arg("--revision");
 
-    let output = cmd.output().ok()?;
-    let rev = String::from_utf8(output.stdout).ok()?;
+    let output = cmd.output()?;
+    let rev = String::from_utf8(output.stdout)?;
 
-    Some(rev.trim_end().to_string())
+    Ok(rev.trim_end().to_string())
 }
