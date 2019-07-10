@@ -1,5 +1,6 @@
 use snafu::{Backtrace, ErrorCompat, Snafu};
 use std::io;
+use std::path;
 use std::result;
 use std::string;
 
@@ -10,6 +11,13 @@ pub type Result<T> = result::Result<T, Error>;
 pub enum Error {
     #[snafu(display("io error: {}", source))]
     IO {
+        source: io::Error,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("file io error [{:?}]: {}", path, source))]
+    FileIO {
+        path: path::PathBuf,
         source: io::Error,
         backtrace: Backtrace,
     },
@@ -37,15 +45,6 @@ pub enum Error {
         source: rmp_serde::decode::Error,
         backtrace: Backtrace,
     },
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::IO {
-            source: err,
-            backtrace: Backtrace::new(),
-        }
-    }
 }
 
 impl From<string::FromUtf8Error> for Error {

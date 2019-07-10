@@ -2,6 +2,7 @@ mod err;
 
 use crate::err::Result;
 use serde_derive::{Deserialize, Serialize};
+use snafu::ResultExt;
 use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
@@ -60,7 +61,7 @@ impl UpdateState {
         let mut path = UpdateState::save_dir();
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
-        let file = File::open(path)?;
+        let file = File::open(&path).context(err::FileIO { path })?;
         let state: UpdateState = rmp_serde::from_read(file)?;
 
         Ok(state)
@@ -70,14 +71,14 @@ impl UpdateState {
         let dir = UpdateState::save_dir();
 
         if !dir.exists() {
-            fs::create_dir_all(&dir)?;
+            fs::create_dir_all(&dir).context(err::FileIO { path: &dir })?;
         }
 
         let mut path = dir;
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
         let contents = rmp_serde::to_vec(self)?;
-        fs::write(path, contents)?;
+        fs::write(&path, contents).context(err::FileIO { path })?;
 
         Ok(())
     }
@@ -132,7 +133,7 @@ fn current_system_revision() -> Result<String> {
     let mut cmd = Command::new("nixos-version");
     cmd.arg("--revision");
 
-    let output = cmd.output()?;
+    let output = cmd.output().context(err::IO)?;
     let rev = String::from_utf8(output.stdout)?;
 
     Ok(rev.trim_end().to_string())
