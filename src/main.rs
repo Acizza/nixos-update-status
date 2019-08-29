@@ -3,13 +3,20 @@ mod err;
 use crate::err::Result;
 use serde_derive::{Deserialize, Serialize};
 use snafu::ResultExt;
+use std::borrow::Cow;
+use std::env;
 use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    match UpdateState::determine_system_state() {
+    let channel = env::args()
+        .nth(1)
+        .map(Cow::Owned)
+        .unwrap_or_else(|| "nixos-unstable-small".into());
+
+    match UpdateState::determine_system_state(channel) {
         Ok(state) => println!("{}", state),
         Err(err) => {
             println!("error");
@@ -31,8 +38,11 @@ enum UpdateState {
 impl UpdateState {
     const DEFAULT_FILE_NAME: &'static str = "state.mpack";
 
-    fn determine_system_state() -> Result<UpdateState> {
-        let remote_rev = remote_system_revision()?;
+    fn determine_system_state<S>(channel: S) -> Result<UpdateState>
+    where
+        S: AsRef<str>,
+    {
+        let remote_rev = remote_system_revision(channel)?;
         let current_rev = current_system_revision()?;
         let is_unsynced = remote_rev != current_rev;
 
@@ -105,13 +115,19 @@ impl Default for UpdateState {
     }
 }
 
-// TODO: allow specifying of channel
-fn remote_system_revision() -> Result<String> {
+fn remote_system_revision<S>(channel: S) -> Result<String>
+where
+    S: AsRef<str>,
+{
     use curl::easy::Easy;
 
     let mut easy = Easy::new();
-    easy.url("https://nixos.org/channels/nixos-unstable-small/git-revision")
-        .and_then(|_| easy.follow_location(true))?;
+
+    easy.url(&format!(
+        "https://nixos.org/channels/{}/git-revision",
+        channel.as_ref()
+    ))
+    .and_then(|_| easy.follow_location(true))?;
 
     let mut buffer = Vec::new();
 
