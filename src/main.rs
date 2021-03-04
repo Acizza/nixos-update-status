@@ -1,22 +1,27 @@
 mod err;
 
 use crate::err::Result;
+use argh::FromArgs;
 use serde_derive::{Deserialize, Serialize};
 use snafu::ResultExt;
-use std::borrow::Cow;
 use std::env;
 use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::process::Command;
 
-fn main() {
-    let channel = env::args()
-        .nth(1)
-        .map(Cow::Owned)
-        .unwrap_or_else(|| "nixos-unstable-small".into());
+/// Display missed NixOS channel updates.
+#[derive(FromArgs)]
+struct Args {
+    /// the NixOS channel to retrieve updates from
+    #[argh(positional)]
+    channel: String,
+}
 
-    match UpdateState::determine_system_state(channel) {
+fn main() {
+    let args: Args = argh::from_env();
+
+    match UpdateState::determine_system_state(args.channel) {
         Ok(state) => println!("{}", state),
         Err(err) => {
             println!("error");
