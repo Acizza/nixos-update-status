@@ -7,9 +7,13 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 argh = "0.1"
-curl = "~0.4.0"
 dirs-next = "2.0"
 nanoserde = "0.1"
+
+[dependencies.attohttpc]
+version = "0.16"
+default-features = false
+features = [ "tls-rustls" ]
 
 [profile.release]
 lto = "thin"

@@ -138,30 +138,18 @@ fn remote_system_revision<S>(channel: S) -> Result<String>
 where
     S: AsRef<str>,
 {
-    use curl::easy::Easy;
-
-    let mut easy = Easy::new();
-
-    easy.url(&format!(
+    let url = format!(
         "https://nixos.org/channels/{}/git-revision",
         channel.as_ref()
-    ))
-    .and_then(|_| easy.follow_location(true))?;
+    );
 
-    let mut buffer = Vec::new();
+    let resp = attohttpc::get(url).follow_redirects(true).send()?;
 
-    {
-        let mut transfer = easy.transfer();
-
-        transfer
-            .write_function(|data| {
-                buffer.extend_from_slice(data);
-                Ok(data.len())
-            })
-            .and_then(|_| transfer.perform())?;
+    if !resp.is_success() {
+        return Err(anyhow!("bad response: {}", resp.status()));
     }
 
-    Ok(String::from_utf8(buffer)?)
+    resp.text().map_err(Into::into)
 }
 
 fn current_system_revision() -> Result<String> {
