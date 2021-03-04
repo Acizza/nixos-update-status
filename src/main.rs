@@ -4,10 +4,10 @@
 
 use anyhow::{anyhow, Context, Result};
 use argh::FromArgs;
-use serde_derive::{Deserialize, Serialize};
+use nanoserde::{DeBin, SerBin};
 use std::env;
 use std::fmt;
-use std::fs::{self, File};
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -37,14 +37,14 @@ fn main() -> Result<()> {
 type MissedUpdates = u32;
 type Revision = String;
 
-#[derive(Serialize, Deserialize)]
+#[derive(SerBin, DeBin)]
 enum UpdateState {
     Synced,
     Unsynced(MissedUpdates, Revision),
 }
 
 impl UpdateState {
-    const DEFAULT_FILE_NAME: &'static str = "state.mpack";
+    const DEFAULT_FILE_NAME: &'static str = "state.bin";
 
     fn determine_system_state<S>(channel: S) -> Result<UpdateState>
     where
@@ -81,10 +81,10 @@ impl UpdateState {
         let mut path = UpdateState::save_dir();
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
-        let file = File::open(&path)
-            .with_context(|| anyhow!("failed to open state file at {}", path.display()))?;
+        let bytes = fs::read_to_string(&path)
+            .with_context(|| anyhow!("failed to read state file at {}", path.display()))?;
 
-        let state: UpdateState = rmp_serde::from_read(file)
+        let state: UpdateState = DeBin::deserialize_bin(bytes.as_bytes())
             .with_context(|| anyhow!("failed to decode state file at {}", path.display()))?;
 
         Ok(state)
@@ -102,7 +102,7 @@ impl UpdateState {
         let mut path = dir;
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
-        let contents = rmp_serde::to_vec(self)?;
+        let contents = SerBin::serialize_bin(self);
 
         fs::write(&path, contents)
             .with_context(|| anyhow!("failed to write state file to {}", path.display()))?;
