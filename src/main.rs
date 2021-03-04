@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+
 use anyhow::{anyhow, Context, Result};
 use argh::FromArgs;
 use serde_derive::{Deserialize, Serialize};
