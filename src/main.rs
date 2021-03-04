@@ -1,9 +1,6 @@
-mod err;
-
-use crate::err::Result;
+use anyhow::{anyhow, Context, Result};
 use argh::FromArgs;
 use serde_derive::{Deserialize, Serialize};
-use snafu::ResultExt;
 use std::env;
 use std::fmt;
 use std::fs::{self, File};
@@ -18,15 +15,17 @@ struct Args {
     channel: String,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args: Args = argh::from_env();
 
     match UpdateState::determine_system_state(args.channel) {
-        Ok(state) => println!("{}", state),
+        Ok(state) => {
+            println!("{}", state);
+            Ok(())
+        }
         Err(err) => {
             println!("error");
-            err::display_error(err);
-            std::process::exit(1);
+            Err(err)
         }
     }
 }
@@ -47,8 +46,10 @@ impl UpdateState {
     where
         S: AsRef<str>,
     {
-        let remote_rev = remote_system_revision(channel)?;
-        let current_rev = current_system_revision()?;
+        let remote_rev =
+            remote_system_revision(channel).context("getting latest channel version")?;
+        let current_rev = current_system_revision().context("getting current system version")?;
+
         let is_unsynced = remote_rev != current_rev;
 
         let mut state = UpdateState::load().unwrap_or_default();
@@ -76,8 +77,11 @@ impl UpdateState {
         let mut path = UpdateState::save_dir();
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
-        let file = File::open(&path).context(err::FileIO { path })?;
-        let state: UpdateState = rmp_serde::from_read(file)?;
+        let file = File::open(&path)
+            .with_context(|| anyhow!("failed to open state file at {}", path.display()))?;
+
+        let state: UpdateState = rmp_serde::from_read(file)
+            .with_context(|| anyhow!("failed to decode state file at {}", path.display()))?;
 
         Ok(state)
     }
@@ -86,14 +90,18 @@ impl UpdateState {
         let dir = UpdateState::save_dir();
 
         if !dir.exists() {
-            fs::create_dir_all(&dir).context(err::FileIO { path: &dir })?;
+            fs::create_dir_all(&dir).with_context(|| {
+                anyhow!("failed to create state directory at {}", dir.display())
+            })?;
         }
 
         let mut path = dir;
         path.push(UpdateState::DEFAULT_FILE_NAME);
 
         let contents = rmp_serde::to_vec(self)?;
-        fs::write(&path, contents).context(err::FileIO { path })?;
+
+        fs::write(&path, contents)
+            .with_context(|| anyhow!("failed to write state file to {}", path.display()))?;
 
         Ok(())
     }
@@ -154,7 +162,10 @@ fn current_system_revision() -> Result<String> {
     let mut cmd = Command::new("nixos-version");
     cmd.arg("--revision");
 
-    let output = cmd.output().context(err::IO)?;
+    let output = cmd
+        .output()
+        .context("failed to retrieve current system revision with nixos-version command")?;
+
     let rev = String::from_utf8(output.stdout)?;
 
     Ok(rev.trim_end().to_string())
