@@ -46,7 +46,7 @@ enum UpdateState {
 impl UpdateState {
     const DEFAULT_FILE_NAME: &'static str = "state.bin";
 
-    fn determine_system_state<S>(channel: S) -> Result<UpdateState>
+    fn determine_system_state<S>(channel: S) -> Result<Self>
     where
         S: AsRef<str>,
     {
@@ -56,42 +56,42 @@ impl UpdateState {
 
         let is_unsynced = remote_rev != current_rev;
 
-        let mut state = UpdateState::load().unwrap_or_default();
+        let mut state = Self::load().unwrap_or_default();
 
         match &state {
-            UpdateState::Synced if is_unsynced => {
-                state = UpdateState::Unsynced(1, remote_rev);
+            Self::Synced if is_unsynced => {
+                state = Self::Unsynced(1, remote_rev);
                 state.save()?;
             }
-            UpdateState::Unsynced(missed, last_rev) if is_unsynced && remote_rev != *last_rev => {
-                state = UpdateState::Unsynced(missed + 1, remote_rev);
+            Self::Unsynced(missed, last_rev) if is_unsynced && remote_rev != *last_rev => {
+                state = Self::Unsynced(missed + 1, remote_rev);
                 state.save()?;
             }
-            UpdateState::Unsynced(_, _) if !is_unsynced => {
-                state = UpdateState::Synced;
+            Self::Unsynced(_, _) if !is_unsynced => {
+                state = Self::Synced;
                 state.save()?;
             }
-            UpdateState::Synced | UpdateState::Unsynced(_, _) => (),
+            Self::Synced | Self::Unsynced(_, _) => (),
         }
 
         Ok(state)
     }
 
-    fn load() -> Result<UpdateState> {
-        let mut path = UpdateState::save_dir();
-        path.push(UpdateState::DEFAULT_FILE_NAME);
+    fn load() -> Result<Self> {
+        let mut path = Self::save_dir();
+        path.push(Self::DEFAULT_FILE_NAME);
 
         let bytes = fs::read_to_string(&path)
             .with_context(|| anyhow!("failed to read state file at {}", path.display()))?;
 
-        let state: UpdateState = DeBin::deserialize_bin(bytes.as_bytes())
+        let state = DeBin::deserialize_bin(bytes.as_bytes())
             .with_context(|| anyhow!("failed to decode state file at {}", path.display()))?;
 
         Ok(state)
     }
 
     fn save(&self) -> Result<()> {
-        let dir = UpdateState::save_dir();
+        let dir = Self::save_dir();
 
         if !dir.exists() {
             fs::create_dir_all(&dir).with_context(|| {
@@ -100,7 +100,7 @@ impl UpdateState {
         }
 
         let mut path = dir;
-        path.push(UpdateState::DEFAULT_FILE_NAME);
+        path.push(Self::DEFAULT_FILE_NAME);
 
         let contents = SerBin::serialize_bin(self);
 
@@ -122,15 +122,15 @@ impl UpdateState {
 impl fmt::Display for UpdateState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UpdateState::Synced => write!(f, "synced"),
-            UpdateState::Unsynced(missed, _) => write!(f, "unsynced ({})", missed),
+            Self::Synced => write!(f, "synced"),
+            Self::Unsynced(missed, _) => write!(f, "unsynced ({})", missed),
         }
     }
 }
 
 impl Default for UpdateState {
-    fn default() -> UpdateState {
-        UpdateState::Synced
+    fn default() -> Self {
+        Self::Synced
     }
 }
 
