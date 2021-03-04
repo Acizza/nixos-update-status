@@ -111,7 +111,9 @@ impl UpdateState {
     }
 
     fn save_dir() -> PathBuf {
-        let mut dir = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("~/.local/share/"));
+        let mut dir =
+            dirs_next::data_local_dir().unwrap_or_else(|| PathBuf::from("~/.local/share/"));
+
         dir.push(env!("CARGO_PKG_NAME"));
         dir
     }
