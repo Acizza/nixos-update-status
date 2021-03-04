@@ -5,11 +5,10 @@
 use anyhow::{anyhow, Context, Result};
 use argh::FromArgs;
 use nanoserde::{DeBin, SerBin};
-use std::env;
-use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::{borrow::Cow, env};
 
 /// Display missed NixOS channel updates.
 #[derive(FromArgs)]
@@ -17,6 +16,15 @@ struct Args {
     /// the NixOS channel to retrieve updates from
     #[argh(positional)]
     channel: String,
+
+    /// the message to display when the system is synced to the latest channel version
+    #[argh(option, short = 's')]
+    synced_message: Option<String>,
+
+    /// the message to display when the system is out of sync with the latest channel version.
+    /// Use "$" to indicate the number of missed updates
+    #[argh(option, short = 'u')]
+    unsynced_message: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -24,7 +32,20 @@ fn main() -> Result<()> {
 
     match UpdateState::determine_system_state(args.channel) {
         Ok(state) => {
-            println!("{}", state);
+            let msg = match state {
+                UpdateState::Synced => args
+                    .synced_message
+                    .map_or_else(|| "synced".into(), Cow::Owned),
+                UpdateState::Unsynced(missed, _) => args
+                    .unsynced_message
+                    .map_or_else(
+                        || format!("unsynced ({})", missed),
+                        |msg| msg.replace("$", &missed.to_string()),
+                    )
+                    .into(),
+            };
+
+            println!("{}", msg);
             Ok(())
         }
         Err(err) => {
@@ -116,15 +137,6 @@ impl UpdateState {
 
         dir.push(env!("CARGO_PKG_NAME"));
         dir
-    }
-}
-
-impl fmt::Display for UpdateState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Synced => write!(f, "synced"),
-            Self::Unsynced(missed, _) => write!(f, "unsynced ({})", missed),
-        }
     }
 }
 
